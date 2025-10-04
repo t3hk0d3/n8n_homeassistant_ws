@@ -101,6 +101,15 @@ Subscribe to any WebSocket event type not covered by the main trigger node.
 Refer to [Core Home Assistant Docs](https://docs.n8n.io/integrations/builtin/credentials/homeassistant/) for the Credentials
 
 
+## Development Documentation
+
+For developers working on this package:
+
+* **[Corner Case Analysis](./CORNER_CASES_ANALYSIS.md)** - Comprehensive analysis of potential issues, race conditions, and memory leaks
+* **[Quick Reference Summary](./CORNER_CASES_SUMMARY.md)** - Quick reference guide with prioritized issues and fix checklists
+* **[Visual Diagrams](./CORNER_CASES_DIAGRAMS.md)** - Visual representations of timing issues and race conditions
+* **[Implementation Guide](./IMPLEMENTATION_GUIDE.md)** - Step-by-step guide with code examples for fixing identified issues
+
 ## Resources
 
 * [n8n community nodes documentation](https://docs.n8n.io/integrations/#community-nodes)
