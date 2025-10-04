@@ -46,7 +46,7 @@ export class HomeAssistant extends EventEmitter {
 	}
 
 	private cmd = new CommandCounter();
-	private ws: SocketConnection<WebSocket>;
+	private ws?: SocketConnection<WebSocket>;
 	private reconnectAttempts = 0;
 	private maxReconnectAttempts = 10;
 	private reconnectTimeoutId: NodeJS.Timeout | null = null;
@@ -64,7 +64,10 @@ export class HomeAssistant extends EventEmitter {
 
 	constructor(private host: CredentialInformation, private apiKey: CredentialInformation, private logger: Logger) {
 		super();
-		this.ws = this.get_authenticated_ws();
+	}
+
+	async connect() {
+		this.ws = await this.get_authenticated_ws();
 	}
 
 	get_logbook(
@@ -323,13 +326,21 @@ export class HomeAssistant extends EventEmitter {
 
 
 
-	private get_authenticated_ws(): SocketConnection<WebSocket> {
+	private async get_authenticated_ws(): Promise<SocketConnection<WebSocket>> {
 		const url = 'ws://' + this.host + '/api/websocket';
 		const ws = new WebSocket(url, {
 			followRedirects: true,
 		});
 
+		const abortController = AbortSignal.timeout(10000)
+		abortController.
+
 		const socket = new SocketConnection(ws)
+
+		ws.on('open', () => {
+
+		})
+
 		ws.on('message', (event: MessageEvent) => {
 			const data = JSON.parse(event.toString());
 			if (data['type'] == 'auth_required') {
@@ -424,6 +435,9 @@ export class HomeAssistant extends EventEmitter {
   }
 
 	private send(id: number, type: string, params?: any): Promise<void> {
+		if (!this.ws) {
+			throw new Error("Not connected yet!")
+		}
 
 		const jsonString = JSON.stringify({
 			type: type,
@@ -437,10 +451,18 @@ export class HomeAssistant extends EventEmitter {
 	}
 
 	onWebSocket(event: string, listener: (this: WebSocket, ...args: any[]) => void): Promise<WebSocket> {
+		if (!this.ws) {
+			throw new Error("Not connected yet!")
+		}
+
 		return this.ws.then(ws => ws.on(event, listener))
 	}
 
 	removeAllWebSocketListeners(): Promise<WebSocket> {
+		if (!this.ws) {
+			throw new Error("Not connected yet!")
+		}
+
 		return this.ws.then(ws => ws.removeAllListeners())
 	}
 
@@ -470,7 +492,7 @@ export class HomeAssistant extends EventEmitter {
 				this.stopPingPong();
 
 				// Close the old connection cleanly
-				this.ws.close();
+				this.ws?.close();
 				// Reset command counter for new connection
 				this.cmd.reset();
 				// Create a new connection
@@ -507,6 +529,10 @@ export class HomeAssistant extends EventEmitter {
 	}
 
 	private stopPingPong(): void {
+		if (!this.ws) {
+			throw new Error("Not connected yet!")
+		}
+
 		if (this.pingIntervalId) {
 			clearInterval(this.pingIntervalId);
 			this.pingIntervalId = null;
@@ -526,7 +552,7 @@ export class HomeAssistant extends EventEmitter {
 
 		this.logger.debug(`Sending ping ${pingId}`);
 
-		this.ws.then(ws => {
+		this.ws?.then(ws => {
 			ws.send(JSON.stringify(pingMessage));
 		}).catch(error => {
 			this.logger.error('Failed to send ping:', error);
@@ -578,11 +604,11 @@ export class HomeAssistant extends EventEmitter {
 		};
 	}
 
-	close(): Promise<void> {
+	async close(): Promise<void> {
 		this.stopReconnecting();
 		this.stopPingPong();
-		return this.ws.then(ws => {
-			this.ws.close();
+		this.ws?.then(ws => {
+			this.ws?.close();
 			ws.close();
 		});
 	}

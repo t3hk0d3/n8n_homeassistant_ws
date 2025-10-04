@@ -4,6 +4,12 @@ import { EventEmitter } from "ws";
 import { load_device_options, load_entity_options, load_trigger_options } from "./loadOptions";
 import { credentialTest }  from './cred';
 
+const enum ResourceType {
+	STATE = 'state',
+	TRIGGER = 'trigger',
+	EVENT = 'event'
+}
+
 export class HomeAssistantWsTrigger implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Home Assistant WS Trigger',
@@ -11,7 +17,7 @@ export class HomeAssistantWsTrigger implements INodeType {
 		icon: 'file:homeAssistantWs.svg',
 		group: ['trigger'],
 		version: 1,
-		subtitle: '={{ $parameter["operation"] + ": " + $parameter["resource"] }}',
+		subtitle: '={{ "Listening: " + $parameter["resource"] }}',
 		description: 'Starts a Workflow on a Home Assistant Event',
 		defaults: {
 			name: 'Home Assistant WS Trigger',
@@ -26,12 +32,16 @@ export class HomeAssistantWsTrigger implements INodeType {
 				options: [
 					{
 						name: 'State Changed',
-						value: 'state',
+						value: ResourceType.STATE,
 					},
 					{
 						name: 'Trigger Fired',
-						value: 'trigger'
+						value: ResourceType.TRIGGER
 					},
+					{
+						name: 'Event Fired',
+						value: ResourceType.EVENT
+					}
 				],
 				default: 'state',
 				noDataExpression: true,
@@ -54,8 +64,6 @@ export class HomeAssistantWsTrigger implements INodeType {
 					loadOptionsMethod: 'load_entity_options',
 				},
 			},
-
-
 			{
 				displayName: 'Device Name or ID',
 				name: 'deviceId',
@@ -89,6 +97,18 @@ export class HomeAssistantWsTrigger implements INodeType {
 					loadOptionsMethod: 'load_trigger_options',
 				},
 			},
+			{
+				displayName: 'Event Name',
+				name: 'eventId',
+				type: 'string',
+				description: 'Name of Home Assistant event to subscribe',
+				default: '*',
+				displayOptions: {
+					show: {
+						resource: ['event']
+					}
+				}
+			}
 		],
 		credentials: [
 			{
@@ -121,7 +141,7 @@ export class HomeAssistantWsTrigger implements INodeType {
 			const resource = this.getNodeParameter('resource', null, {});
 
 			switch (resource) {
-				case 'state': {
+				case ResourceType.STATE: {
 					const entityId = this.getNodeParameter('entityId', null, {});
 					emitter = await assistant!.subscribe_events('state_changed')
 					emitter?.on('event', async (event: any) => {
@@ -133,13 +153,9 @@ export class HomeAssistantWsTrigger implements INodeType {
 						}
 					})
 
-					emitter?.on('error', (error: any) => {
-						this.emitError(new NodeApiError(this.getNode(), error));
-					})
-
 					break;
 				}
-				case 'trigger': {
+				case ResourceType.TRIGGER: {
 						const triggerId = this.getNodeParameter('triggerId', null, {});
 						const deviceId = this.getNodeParameter('deviceId', null, {});
 						emitter = await assistant!.subscribe_trigger(deviceId as string, triggerId as string[])
@@ -148,13 +164,22 @@ export class HomeAssistantWsTrigger implements INodeType {
 								this.helpers.returnJsonArray([event])
 							]);
 						})
-						emitter?.on('error', (error: any) => {
-							this.emitError(new NodeApiError(this.getNode(), error));
-						})
 					}
 					break;
-
+				case ResourceType.EVENT:
+					const eventId = this.getNodeParameter('eventId', '*') as string;
+					emitter = await assistant!.subscribe_events(eventId);
+					emitter?.on('event', (event: any) => {
+						this.emit([
+							this.helpers.returnJsonArray([event])
+						]);
+					})
+					break;
 			}
+
+			emitter?.on('error', (error: any) => {
+				this.emitError(new NodeApiError(this.getNode(), error));
+			})
 		};
 
 		const resubscribeAfterReconnect = async () => {
